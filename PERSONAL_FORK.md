@@ -104,3 +104,25 @@ upstream repository delegates those broad checks to CI.
 
 The official T3 Code app updates independently of this source checkout. Changes
 on `personal` appear only when running or building this checkout.
+
+## Local Claude profiles
+
+T3 Code has two enabled Claude provider instances:
+
+- `Claude Work` uses the default Claude configuration; it is intended for
+  `jakub.chledowski@focal.systems`.
+- `Claude Personal` uses `/Users/jakub/.claude_personal_home` as its
+  `CLAUDE_CONFIG_DIR`; it is intended for `jakub.chledowski@gmail.com`.
+
+To repair or repeat the personal login without disturbing the work account:
+
+```bash
+CLAUDE_CONFIG_DIR=/Users/jakub/.claude_personal_home claude auth login
+```
+
+Then use **Settings → Providers → Refresh provider status** in T3 Code.
+Do not put Claude OAuth codes, cookies, or tokens in this repository.
+
+CodexBar tracks Codex successfully from the active Codex login. Multiple Claude
+accounts require CodexBar token-account or `claude-swap` setup; T3 Code provider
+instances are not imported into CodexBar automatically.
