@@ -117,6 +117,17 @@ it.layer(NodeServices.layer)("provider account switch decider", (it) => {
     }),
   );
 
+  it.effect("rejects a switch to the account the thread already uses", () =>
+    Effect.gen(function* () {
+      const error = yield* decideOrchestrationCommand({
+        command: { ...command, modelSelection: { instanceId: claudeWork, model: "other-model" } },
+        readModel: makeReadModel(makeSession({ instanceId: claudeWork, status: "ready" })),
+      }).pipe(Effect.flip);
+      expect(error._tag).toBe("OrchestrationCommandInvariantError");
+      expect(error.message).toContain("already uses");
+    }),
+  );
+
   it.effect("rejects a switch while a turn is running", () =>
     Effect.gen(function* () {
       const error = yield* decideOrchestrationCommand({

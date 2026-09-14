@@ -1721,6 +1721,12 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
           detail: `Thread '${command.threadId}' is on '${currentInstanceId}', not '${command.fromInstanceId}'. Select the account again.`,
         });
       }
+      if (command.modelSelection.instanceId === command.fromInstanceId) {
+        return yield* new OrchestrationCommandInvariantError({
+          commandType: command.type,
+          detail: `Thread '${command.threadId}' already uses '${command.fromInstanceId}'.`,
+        });
+      }
       if (
         thread.session?.status === "starting" ||
         thread.session?.status === "running" ||
