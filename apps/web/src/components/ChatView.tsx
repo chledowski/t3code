@@ -8425,7 +8425,7 @@ export default function ChatView(props: ChatViewProps) {
         const fromLabel = resolveProviderInstanceDisplayName(accountSwitch.from);
         const toLabel = resolveProviderInstanceDisplayName(accountSwitch.to);
         const confirmed = await requestConfirmDialog(
-          `Continue this thread on ${toLabel}?\n${fromLabel} keeps the conversation it has been running. ${toLabel} starts fresh from your next message; the messages shown here stay.`,
+          `Continue this thread on ${toLabel}?\n${toLabel} starts a fresh conversation from your next message; the messages shown here stay. This thread cannot return to the conversation ${fromLabel} was running, even by switching back.`,
         );
         if (confirmed !== true) {
           scheduleComposerFocus();
@@ -8452,6 +8452,9 @@ export default function ChatView(props: ChatViewProps) {
           scheduleComposerFocus();
           return;
         }
+        // The server rebinds the thread; the composer follows its session instead of a draft.
+        scheduleComposerFocus();
+        return;
       }
       setComposerDraftModelSelection(
         scopeThreadRef(activeThread.environmentId, activeThread.id),
@@ -9208,7 +9211,9 @@ export default function ChatView(props: ChatViewProps) {
                             runtimeMode={runtimeMode}
                             interactionMode={interactionMode}
                             lockedProvider={lockedProvider}
-                            providerAccountSwitchEnabled={providerAccountSwitchEnabled}
+                            providerAccountSwitchEnabled={
+                              providerAccountSwitchEnabled && !isWorking
+                            }
                             providerStatuses={providerStatuses as ServerProvider[]}
                             providerCatalogKnown={serverConfig !== null}
                             activeProjectDefaultModelSelection={activeProjectDefaultModelSelection}

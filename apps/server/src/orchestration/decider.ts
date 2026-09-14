@@ -1723,8 +1723,10 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
       }
       if (
         thread.session?.status === "starting" ||
+        thread.session?.status === "running" ||
         thread.session?.activeTurnId != null ||
-        hasQueuedTurnStartForThread(thread, command.createdAt)
+        hasQueuedTurnStartForThread(thread, command.createdAt) ||
+        openRequests(thread).size > 0
       ) {
         return yield* new OrchestrationCommandInvariantError({
           commandType: command.type,

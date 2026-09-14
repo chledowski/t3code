@@ -1061,11 +1061,11 @@ describe("ProviderRuntimeIngestion", () => {
         threadId,
         session: {
           threadId,
-          status: "stopped",
+          status: "running",
           providerName: "codex",
           providerInstanceId: ProviderInstanceId.make("codex_personal"),
           runtimeMode: "approval-required",
-          activeTurnId: null,
+          activeTurnId: asTurnId("turn-on-new-account"),
           lastError: null,
           updatedAt: switchedAt,
         },
@@ -1085,8 +1085,12 @@ describe("ProviderRuntimeIngestion", () => {
       const thread = (yield* Effect.promise(() => harness.readModel())).threads.find(
         (entry) => entry.id === threadId,
       );
-      expect(thread?.session?.providerInstanceId).toBe(ProviderInstanceId.make("codex_personal"));
-      expect(thread?.session?.updatedAt).toBe(switchedAt);
+      expect(thread?.session).toMatchObject({
+        status: "running",
+        providerInstanceId: ProviderInstanceId.make("codex_personal"),
+        activeTurnId: asTurnId("turn-on-new-account"),
+        updatedAt: switchedAt,
+      });
     }),
   );
 

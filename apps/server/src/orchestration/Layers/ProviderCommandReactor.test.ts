@@ -42,6 +42,7 @@ import { deriveServerPaths, ServerConfig } from "../../config.ts";
 import { TextGenerationError } from "@t3tools/contracts";
 import {
   ProviderAdapterRequestError,
+  ProviderUnsupportedError,
   ProviderWorkspaceMissingError,
   type ProviderServiceError,
 } from "../../provider/Errors.ts";
@@ -373,6 +374,9 @@ describe("ProviderCommandReactor", () => {
       assertConversationRollbackSupported: () => unsupported(),
       getInstanceInfo: (instanceId) => {
         const raw = String(instanceId);
+        if (raw.startsWith("missing")) {
+          return Effect.fail(new ProviderUnsupportedError({ provider: instanceId }));
+        }
         const driverKind = ProviderDriverKind.make(
           raw.startsWith("claude")
             ? "claudeAgent"
@@ -4380,6 +4384,62 @@ describe("ProviderCommandReactor", () => {
         });
         expect(thread?.modelSelection.instanceId).toBe(claudeWork);
         expect(thread?.session?.providerInstanceId).toBe(claudeWork);
+      }),
+    );
+
+    effectIt.effect("finishes a retried switch whose binding already moved to the target", () =>
+      Effect.gen(function* () {
+        const harness = yield* Effect.promise(() =>
+          createHarness({
+            threadModelSelection: { instanceId: claudeWork, model: "claude-model" },
+          }),
+        );
+        // An earlier attempt failed after rebinding and before the projection moved.
+        yield* bindThread(harness, {
+          provider: "claudeAgent",
+          sessionInstanceId: claudeWork,
+          boundInstanceId: claudePersonal,
+        });
+
+        yield* switchAccount(harness, { from: claudeWork, to: claudePersonal });
+        const { thread, binding, failures } = yield* readState(harness);
+
+        expect(failures).toEqual([]);
+        expect(binding).toMatchObject({
+          providerInstanceId: claudePersonal,
+          resumeCursor: { opaque: "resume-before-switch" },
+        });
+        expect(thread?.modelSelection).toEqual({
+          instanceId: claudePersonal,
+          model: "switched-model",
+        });
+        expect(thread?.session).toMatchObject({
+          status: "stopped",
+          providerInstanceId: claudePersonal,
+        });
+      }),
+    );
+
+    effectIt.effect("reports an unconfigured target account", () =>
+      Effect.gen(function* () {
+        const harness = yield* Effect.promise(() =>
+          createHarness({
+            threadModelSelection: { instanceId: claudeWork, model: "claude-model" },
+          }),
+        );
+        yield* bindThread(harness, { provider: "claudeAgent", sessionInstanceId: claudeWork });
+
+        yield* switchAccount(harness, { from: claudeWork, to: ProviderInstanceId.make("missing") });
+        const { binding, failures } = yield* readState(harness);
+
+        expect(failures).toHaveLength(1);
+        expect(failures?.[0]?.payload).toMatchObject({
+          detail: expect.stringContaining(
+            "Requested provider instance 'missing' is not configured in this build",
+          ),
+        });
+        expect(harness.stopSession).not.toHaveBeenCalled();
+        expect(binding?.providerInstanceId).toBe(claudeWork);
       }),
     );
 

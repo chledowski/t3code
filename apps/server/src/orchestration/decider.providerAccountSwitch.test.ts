@@ -1,11 +1,13 @@
 import {
   CommandId,
+  EventId,
   ProjectId,
   ProviderInstanceId,
   ThreadId,
   TurnId,
   type OrchestrationReadModel,
   type OrchestrationSession,
+  type OrchestrationThread,
 } from "@t3tools/contracts";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { expect, it } from "@effect/vitest";
@@ -18,7 +20,10 @@ const threadId = ThreadId.make("thread-1");
 const claudeWork = ProviderInstanceId.make("claude_work");
 const claudePersonal = ProviderInstanceId.make("claude_personal");
 
-function makeReadModel(session: OrchestrationSession | null): OrchestrationReadModel {
+function makeReadModel(
+  session: OrchestrationSession | null,
+  activities: OrchestrationThread["activities"] = [],
+): OrchestrationReadModel {
   return {
     snapshotSequence: 0,
     projects: [],
@@ -45,7 +50,7 @@ function makeReadModel(session: OrchestrationSession | null): OrchestrationReadM
         deletedAt: null,
         messages: [],
         proposedPlans: [],
-        activities: [],
+        activities,
         checkpoints: [],
         session,
       },
@@ -123,6 +128,39 @@ it.layer(NodeServices.layer)("provider account switch decider", (it) => {
             activeTurnId: TurnId.make("turn-1"),
           }),
         ),
+      }).pipe(Effect.flip);
+      expect(error._tag).toBe("OrchestrationCommandInvariantError");
+      expect(error.message).toContain("still working");
+    }),
+  );
+
+  it.effect("rejects a switch while the session reports running without a turn id", () =>
+    Effect.gen(function* () {
+      const error = yield* decideOrchestrationCommand({
+        command,
+        readModel: makeReadModel(makeSession({ instanceId: claudeWork, status: "running" })),
+      }).pipe(Effect.flip);
+      expect(error._tag).toBe("OrchestrationCommandInvariantError");
+      expect(error.message).toContain("still working");
+    }),
+  );
+
+  it.effect("rejects a switch while an approval is waiting on the user", () =>
+    Effect.gen(function* () {
+      const requestActivity = {
+        id: EventId.make("activity-req-1"),
+        tone: "approval" as const,
+        kind: "approval.requested",
+        summary: "approval.requested",
+        payload: { requestId: "req-1" },
+        turnId: null,
+        createdAt: NOW,
+      } as OrchestrationThread["activities"][number];
+      const error = yield* decideOrchestrationCommand({
+        command,
+        readModel: makeReadModel(makeSession({ instanceId: claudeWork, status: "ready" }), [
+          requestActivity,
+        ]),
       }).pipe(Effect.flip);
       expect(error._tag).toBe("OrchestrationCommandInvariantError");
       expect(error.message).toContain("still working");

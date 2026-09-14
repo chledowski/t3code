@@ -1663,6 +1663,10 @@ const make = Effect.gen(function* () {
             return true;
         }
       })();
+      if (event.type === "session.exited" && !shouldApplyThreadLifecycle) {
+        // Nothing in the old account's exit belongs to the thread's current session.
+        return;
+      }
       const acceptedTurnStartedSourcePlan =
         event.type === "turn.started" && shouldApplyThreadLifecycle
           ? yield* getSourceProposedPlanReferenceForAcceptedTurnStart(thread.id, eventTurnId)

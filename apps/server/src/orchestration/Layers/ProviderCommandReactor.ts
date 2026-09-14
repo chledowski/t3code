@@ -1857,8 +1857,10 @@ const make = Effect.gen(function* () {
           binding?.providerInstanceId ??
           thread.session?.providerInstanceId ??
           thread.modelSelection.instanceId;
+        // A retry after a failure past the rebind finds the binding already on the target.
+        const bindingAlreadyMoved = binding?.providerInstanceId === modelSelection.instanceId;
         const method = "thread.provider-account.switch";
-        if (currentInstanceId !== fromInstanceId) {
+        if (!bindingAlreadyMoved && currentInstanceId !== fromInstanceId) {
           return yield* new ProviderAdapterRequestError({
             provider: providerErrorLabel(
               binding?.provider ?? thread.session?.providerName ?? undefined,
@@ -1867,7 +1869,18 @@ const make = Effect.gen(function* () {
             detail: `Thread '${thread.id}' is on '${currentInstanceId}', not '${fromInstanceId}'. Select the account again.`,
           });
         }
-        const nextInfo = yield* providerService.getInstanceInfo(modelSelection.instanceId);
+        const nextInfo = yield* providerService.getInstanceInfo(modelSelection.instanceId).pipe(
+          Effect.mapError(
+            () =>
+              new ProviderAdapterRequestError({
+                provider: providerErrorLabelFromInstanceHint({
+                  instanceId: String(modelSelection.instanceId),
+                }),
+                method,
+                detail: `Requested provider instance '${modelSelection.instanceId}' is not configured in this build.`,
+              }),
+          ),
+        );
         // A removed account cannot be looked up; its resume state is treated as unreadable.
         const currentInfo = Option.getOrUndefined(
           yield* Effect.option(providerService.getInstanceInfo(currentInstanceId)),
@@ -1889,7 +1902,7 @@ const make = Effect.gen(function* () {
         if (thread.session && thread.session.status !== "stopped") {
           yield* providerService.stopSession({ threadId: thread.id });
         }
-        if (binding) {
+        if (binding && !bindingAlreadyMoved) {
           yield* providerSessionDirectory.upsert({
             threadId: thread.id,
             provider: binding.provider,
