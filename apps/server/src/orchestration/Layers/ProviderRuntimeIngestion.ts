@@ -1634,7 +1634,13 @@ const make = Effect.gen(function* () {
         }
         switch (event.type) {
           case "session.exited":
-            return true;
+            // The exit of an account the thread has since left (a provider
+            // account switch stops it before rebinding) must not reclaim the session.
+            return (
+              thread.session?.providerInstanceId === undefined ||
+              event.providerInstanceId === undefined ||
+              sameId(thread.session.providerInstanceId, event.providerInstanceId)
+            );
           case "session.started":
           case "thread.started":
             return true;
