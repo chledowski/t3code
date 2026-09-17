@@ -513,6 +513,49 @@ it.layer(Layer.mergeAll(NodeServices.layer, ServerSettingsModule.layerTest(), Te
         }),
       );
 
+      it.effect("reports usage as unsupported for a backend without a subscription", () =>
+        Effect.gen(function* () {
+          const status = yield* checkCodexProviderStatus(defaultCodexSettings, () =>
+            Effect.succeed(
+              makeCodexProbeSnapshot({ account: { account: null, requiresOpenaiAuth: false } }),
+            ),
+          );
+
+          assert.strictEqual(status.status, "ready");
+          assert.deepStrictEqual(status.usageLimits?.unavailable, { reason: "unsupported" });
+        }),
+      );
+
+      it.effect("keeps a signed-out ChatGPT account on the failed-probe path", () =>
+        Effect.gen(function* () {
+          const status = yield* checkCodexProviderStatus(defaultCodexSettings, () =>
+            Effect.succeed(
+              makeCodexProbeSnapshot({ account: { account: null, requiresOpenaiAuth: true } }),
+            ),
+          );
+
+          assert.strictEqual(status.auth.status, "unauthenticated");
+          assert.deepStrictEqual(status.usageLimits?.unavailable, { reason: "probeFailed" });
+        }),
+      );
+
+      it.effect("keeps a failed ChatGPT usage request visible", () =>
+        Effect.gen(function* () {
+          const status = yield* checkCodexProviderStatus(defaultCodexSettings, () =>
+            Effect.succeed(
+              makeCodexProbeSnapshot({
+                rateLimits: { failure: "Codex could not read usage (JSON-RPC -32600)." },
+              }),
+            ),
+          );
+
+          assert.deepStrictEqual(status.usageLimits?.unavailable, {
+            reason: "probeFailed",
+            message: "Codex could not read usage (JSON-RPC -32600).",
+          });
+        }),
+      );
+
       it.effect.each([
         "codex",
         "/Applications/Custom App.app/Contents/Resources/codex",
