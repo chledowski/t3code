@@ -176,6 +176,7 @@ import {
   resolveSidebarRowAccessibility,
   type SidebarDropVerb,
   resolveSidebarThreadStatus,
+  belongsOnSidebarWorkingShelf,
   searchSidebarThreads,
   shouldCreateNewThreadInCurrentProject,
   shouldNavigateAfterThreadPark,
@@ -258,6 +259,7 @@ const SETTLED_TAIL_PAGE_COUNT = 25;
 // Fresh keys deliberately reset both shelves to collapsed for existing users.
 const SETTLED_SHELF_EXPANDED_KEY = "t3code:sidebar:settled-expanded";
 const SNOOZED_SHELF_EXPANDED_KEY = "t3code:sidebar:snoozed-expanded";
+const WORKING_SHELF_EXPANDED_KEY = "t3code:sidebar:working-expanded";
 
 function compactSidebarTimeLabel(label: string): string {
   if (label === "just now") return "now";
@@ -639,7 +641,7 @@ function SidebarDragBoundary(props: {
 
 // Shelf headers stay visible and keep their measured height while dragging.
 function SidebarSectionHeader(props: {
-  marker: "snoozed-header" | "settled-header";
+  marker: "working-header" | "snoozed-header" | "settled-header";
   label: string;
   className?: string;
   // While dragging, the settled header reads at full strength and takes the
@@ -686,7 +688,7 @@ function SidebarSectionHeader(props: {
         type="button"
         onClick={props.toggle.onToggle}
         aria-expanded={props.toggle.expanded}
-        data-testid={`sidebar-${snoozed ? "snoozed" : "settled"}-shelf-toggle`}
+        data-testid={`sidebar-${props.marker.replace("-header", "")}-shelf-toggle`}
         className={cn(className, "cursor-pointer")}
       >
         {content}
@@ -2184,6 +2186,10 @@ export default function Sidebar() {
   const confirmThreadArchive = useClientSettings((s) => s.confirmThreadArchive);
   const sidebarProjectSortOrder = useClientSettings((s) => s.sidebarProjectSortOrder);
   const timestampFormat = useClientSettings((s) => s.timestampFormat);
+  const workingShelf = useClientSettings((s) => s.sidebarWorkingShelf);
+  const workingShelfIncludesMonitoring = useClientSettings(
+    (s) => s.sidebarWorkingShelfIncludesMonitoring,
+  );
   const projectGroupingSettings = useClientSettings(selectProjectGroupingSettings);
   const {
     settleThread,
@@ -2561,6 +2567,7 @@ export default function Sidebar() {
     draggableThreadKeys,
     activeReorderableThreadKeys,
     activeThreads,
+    workingThreads,
     snoozedThreads,
     settledThreads,
     snoozeNow,
@@ -2579,6 +2586,7 @@ export default function Sidebar() {
     );
     const pinned: EnvironmentThreadShell[] = [];
     const active: EnvironmentThreadShell[] = [];
+    const working: EnvironmentThreadShell[] = [];
     const snoozed: EnvironmentThreadShell[] = [];
     const settled: EnvironmentThreadShell[] = [];
     const draggable = new Set<string>();
@@ -2622,6 +2630,13 @@ export default function Sidebar() {
         settled.push(thread);
       } else if (thread.pinnedAt != null) {
         pinned.push(thread);
+      } else if (
+        workingShelf &&
+        // The open thread stays in the list until the user leaves it.
+        threadKey !== routeThreadKey &&
+        belongsOnSidebarWorkingShelf(thread, workingShelfIncludesMonitoring)
+      ) {
+        working.push(thread);
       } else {
         active.push(thread);
       }
@@ -2652,6 +2667,7 @@ export default function Sidebar() {
               preferredIds: optimisticDrop.order,
               getId: (thread) => scopedThreadKey(scopeThreadRef(thread.environmentId, thread.id)),
             }),
+      workingThreads: sortThreadsForSidebar(working),
       // Soonest wake first: "what comes back next" is the shelf's question.
       snoozedThreads: snoozed.toSorted(
         (left, right) =>
@@ -2661,15 +2677,31 @@ export default function Sidebar() {
       settledThreads: sortSettledThreads(settled),
       snoozeNow: preciseNow,
     };
-  }, [nowMinute, optimisticDrop, scopedProjectKeys, serverConfigs, snoozeWakeTick, threads]);
+  }, [
+    nowMinute,
+    optimisticDrop,
+    routeThreadKey,
+    scopedProjectKeys,
+    serverConfigs,
+    snoozeWakeTick,
+    threads,
+    workingShelf,
+    workingShelfIncludesMonitoring,
+  ]);
 
   const threadSearchInputRef = useRef<HTMLInputElement>(null);
   const [threadSearchQuery, setThreadSearchQuery] = useState("");
   const [activeSearchResultIndex, setActiveSearchResultIndex] = useState(0);
   const isSearchingThreads = threadSearchQuery.trim().length > 0;
   const searchableThreads = useMemo(
-    () => [...pinnedThreads, ...activeThreads, ...snoozedThreads, ...settledThreads],
-    [activeThreads, pinnedThreads, settledThreads, snoozedThreads],
+    () => [
+      ...pinnedThreads,
+      ...activeThreads,
+      ...workingThreads,
+      ...snoozedThreads,
+      ...settledThreads,
+    ],
+    [activeThreads, pinnedThreads, settledThreads, snoozedThreads, workingThreads],
   );
   const searchEnvironmentIds = useMemo(
     () =>
@@ -2805,9 +2837,34 @@ export default function Sidebar() {
     return routeThread === undefined ? EMPTY_THREADS : [routeThread];
   }, [routeThreadKey, snoozedShelfExpanded, snoozedThreads]);
 
+  // Like the snoozed shelf, the working shelf starts collapsed and its
+  // collapsed rows do not render.
+  const [workingShelfExpanded, setWorkingShelfExpanded] = useLocalStorage(
+    WORKING_SHELF_EXPANDED_KEY,
+    false,
+    Schema.Boolean,
+  );
+  const toggleWorkingShelf = useCallback(
+    () => setWorkingShelfExpanded((value) => !value),
+    [setWorkingShelfExpanded],
+  );
+  const visibleWorkingThreads = workingShelfExpanded ? workingThreads : EMPTY_THREADS;
+
   const orderedThreads = useMemo(
-    () => [...pinnedThreads, ...activeThreads, ...visibleSnoozedThreads, ...renderedSettledThreads],
-    [pinnedThreads, activeThreads, visibleSnoozedThreads, renderedSettledThreads],
+    () => [
+      ...pinnedThreads,
+      ...activeThreads,
+      ...visibleWorkingThreads,
+      ...visibleSnoozedThreads,
+      ...renderedSettledThreads,
+    ],
+    [
+      pinnedThreads,
+      activeThreads,
+      visibleWorkingThreads,
+      visibleSnoozedThreads,
+      renderedSettledThreads,
+    ],
   );
   const orderedThreadKeys = useMemo(
     () =>
@@ -3230,10 +3287,11 @@ export default function Sidebar() {
     };
     add(pinnedThreads, "pinned");
     add(activeThreads, "active");
+    add(workingThreads, "working");
     add(snoozedThreads, "snoozed");
     add(settledThreads, "settled");
     return map;
-  }, [activeThreads, pinnedThreads, settledThreads, snoozedThreads]);
+  }, [activeThreads, pinnedThreads, settledThreads, snoozedThreads, workingThreads]);
   const pinnedKeys = useMemo(
     () =>
       pinnedThreads.map((thread) =>
@@ -3400,6 +3458,7 @@ export default function Sidebar() {
     if (
       pinnedThreads.length +
         activeThreads.length +
+        workingThreads.length +
         snoozedThreads.length +
         settledThreads.length ===
       0
@@ -3413,6 +3472,10 @@ export default function Sidebar() {
     const activeRows = rowsOf(activeThreads, "active");
     items.push({ kind: "marker", marker: "active-placeholder" });
     items.push(...activeRows);
+    if (workingThreads.length > 0) {
+      items.push({ kind: "marker", marker: "working-header" });
+      items.push(...rowsOf(visibleWorkingThreads, "working"));
+    }
     if (snoozedThreads.length > 0) {
       items.push({ kind: "marker", marker: "snoozed-header" });
       items.push(...rowsOf(visibleSnoozedThreads, "snoozed"));
@@ -3429,6 +3492,8 @@ export default function Sidebar() {
     settledThreads.length,
     snoozedThreads.length,
     visibleSnoozedThreads,
+    visibleWorkingThreads,
+    workingThreads.length,
   ]);
   useEffect(() => {
     if (
@@ -4826,6 +4891,7 @@ export default function Sidebar() {
                             id={threadKey}
                             disabled={
                               renamingThreadKey === threadKey ||
+                              section === "working" ||
                               !draggableThreadKeys.has(threadKey) ||
                               optimisticDrop !== null
                             }
@@ -4891,12 +4957,30 @@ export default function Sidebar() {
                               />,
                             );
                             break;
+                          case "working-header":
+                            items.push(
+                              <SidebarSectionHeader
+                                key="working-shelf-header"
+                                marker="working-header"
+                                className="mt-auto"
+                                label={
+                                  workingShelfExpanded
+                                    ? "Working"
+                                    : `Working (${workingThreads.length})`
+                                }
+                                toggle={{
+                                  expanded: workingShelfExpanded,
+                                  onToggle: toggleWorkingShelf,
+                                }}
+                              />,
+                            );
+                            break;
                           case "snoozed-header":
                             items.push(
                               <SidebarSectionHeader
                                 key="snoozed-shelf-header"
                                 marker="snoozed-header"
-                                className="mt-auto"
+                                className={cn(workingThreads.length === 0 && "mt-auto")}
                                 label={
                                   snoozedShelfExpanded
                                     ? "Snoozed"
@@ -4914,7 +4998,11 @@ export default function Sidebar() {
                               <SidebarSectionHeader
                                 key="settled-shelf-header"
                                 marker="settled-header"
-                                className={cn(snoozedThreads.length === 0 && "mt-auto")}
+                                className={cn(
+                                  workingThreads.length === 0 &&
+                                    snoozedThreads.length === 0 &&
+                                    "mt-auto",
+                                )}
                                 label={
                                   settledShelfExpanded
                                     ? "Settled"

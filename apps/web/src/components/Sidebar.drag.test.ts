@@ -603,6 +603,22 @@ describe("sidebar drag projection", () => {
     expect(result.get(sidebarMarkerId("settled-placeholder"))).toEqual({ ...stationary, y: -83 });
   });
 
+  it("keeps the working shelf in place while active rows reorder", () => {
+    const items = [
+      pinnedHeader,
+      divider,
+      thread("a1", "active"),
+      thread("a2", "active"),
+      marker("working-header"),
+      thread("w", "working"),
+      settledHeader,
+      thread("s", "settled"),
+    ];
+    const result = preview({ items, settledOrder: ["s"], settledExpanded: true }, "a1", "a2");
+    expect(result.get(sidebarMarkerId("working-header"))).toEqual(stationary);
+    expect(result.get("w")).toEqual(stationary);
+  });
+
   it("preserves a collapsed snoozed header while another section changes", () => {
     const items = [
       pinnedHeader,

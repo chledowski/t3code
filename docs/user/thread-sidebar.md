@@ -130,6 +130,14 @@ rules to connected environments that support shared settings. Offline environmen
 and older servers keep their previous values. Changing a rule does not reopen
 already settled threads.
 
+## Shelve working threads
+
+On web and desktop, turn on **Working shelf** in **Settings → General** to move threads with a
+running turn into a collapsed **Working** shelf. The thread you have open stays in place until you
+leave it, and a thread returns to the active list when its turn ends. Threads that only monitor
+background work stay in the active list unless you also turn on **Shelve monitoring threads**.
+Pinned threads stay pinned.
+
 ## Link a pull request
 
 The server finds the PR for each unsettled thread's saved branch, even when your

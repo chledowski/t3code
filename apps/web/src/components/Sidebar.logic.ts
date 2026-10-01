@@ -125,9 +125,10 @@ export const animateSidebarLayoutChanges: AnimateLayoutChanges = (args) =>
 // the lifecycle action; Sidebar.drag previews the resulting layout. Pinned
 // and active threads keep the dragged position; settled threads use time
 // order. Snoozed rows can leave the shelf, but dropping into it is not
-// supported because snoozing requires a wake time.
+// supported because snoozing requires a wake time. The working shelf follows
+// live thread status, so it is neither a drag source nor a destination.
 
-export type SidebarSection = "pinned" | "active" | "snoozed" | "settled";
+export type SidebarSection = "pinned" | "active" | "working" | "snoozed" | "settled";
 
 /** Sortable ids: thread rows use their scoped key; structural items use a
     colon-free prefix: scoped thread keys always contain a colon. */
@@ -141,6 +142,7 @@ export type SidebarListMarker =
   | "settled-placeholder"
   /** The boundary between pinned and active rows. */
   | "pinned-divider"
+  | "working-header"
   | "snoozed-header"
   | "settled-header";
 
@@ -158,14 +160,15 @@ export function sidebarListItemId(item: SidebarListItem): string {
 
 /** The section a slot belongs to, read off the markers around it: from
     the top down, everything before the pinned divider is pinned, then the
-    inbox until the snoozed header, the shelf until the settled header,
-    then settled. */
+    inbox until the working or snoozed header, each shelf until the next
+    header, then settled. */
 function sectionAtSidebarSlot(items: readonly SidebarListItem[], index: number): SidebarSection {
   let section: SidebarSection = "pinned";
   for (let i = 0; i < index && i < items.length; i += 1) {
     const item = items[i]!;
     if (item.kind !== "marker") continue;
     if (item.marker === "pinned-divider") section = "active";
+    else if (item.marker === "working-header") section = "working";
     else if (item.marker === "snoozed-header") section = "snoozed";
     else if (item.marker === "settled-header") section = "settled";
   }
@@ -173,7 +176,7 @@ function sectionAtSidebarSlot(items: readonly SidebarListItem[], index: number):
 }
 
 /** Resolve the destination section and manual order from an arrayMove across
- * the separators. The snoozed shelf is never a destination. */
+ * the separators. The working and snoozed shelves are never destinations. */
 export type SidebarDropTarget = {
   readonly section: "pinned" | "active" | "settled";
   readonly pinnedOrder: readonly string[];
@@ -191,14 +194,19 @@ export function resolveSidebarDropTarget(
   const moved = items.filter((_, index) => index !== activeIndex);
   moved.splice(overIndex, 0, items[activeIndex]!);
   const section = sectionAtSidebarSlot(moved, overIndex);
-  if (section === "snoozed") return null;
+  if (section === "working" || section === "snoozed") return null;
   const pinnedOrder: string[] = [];
   const activeOrder: string[] = [];
   let currentSection: SidebarSection = "pinned";
   for (const item of moved) {
     if (item.kind === "marker") {
       if (item.marker === "pinned-divider") currentSection = "active";
-      else if (item.marker === "snoozed-header" || item.marker === "settled-header") break;
+      else if (
+        item.marker === "working-header" ||
+        item.marker === "snoozed-header" ||
+        item.marker === "settled-header"
+      )
+        break;
     } else if (currentSection === "pinned") pinnedOrder.push(item.key);
     else activeOrder.push(item.key);
   }
@@ -234,14 +242,14 @@ export type SidebarThreadDropPlan =
 
 /** What dropping in `to` does to a thread lifted from `from`, for the badge
     on the lifted row. Null while reordering inside one section and for the
-    snoozed shelf, which cannot be a drop target. */
+    working and snoozed shelves, which cannot be drop targets. */
 export type SidebarDropVerb = "pin" | "unpin" | "settle" | "unsettle" | "wake";
 
 export function resolveSidebarDropVerb(
   from: SidebarSection,
   to: SidebarSection | null,
 ): SidebarDropVerb | null {
-  if (to === null || to === from || to === "snoozed") return null;
+  if (to === null || to === from || to === "working" || to === "snoozed") return null;
   if (to === "pinned") return "pin";
   if (to === "settled") return "settle";
   if (from === "pinned") return "unpin";
@@ -840,6 +848,16 @@ export function resolveSidebarThreadStatus(thread: SidebarThreadStatusInput): Si
     return "monitoring";
   }
   return "ready";
+}
+
+/** Working threads shelve when the user enables the working shelf; threads
+    whose only live work is monitoring shelve only when that is enabled too. */
+export function belongsOnSidebarWorkingShelf(
+  thread: SidebarThreadStatusInput,
+  includeMonitoring: boolean,
+): boolean {
+  const status = resolveSidebarThreadStatus(thread);
+  return status === "working" || (includeMonitoring && status === "monitoring");
 }
 
 /** First VALID timestamp wins: `a ?? b` falls through on null, but a present-

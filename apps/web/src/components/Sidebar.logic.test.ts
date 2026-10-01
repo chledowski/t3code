@@ -25,6 +25,7 @@ import {
   resolveProjectStatusIndicator,
   resolveSidebarRowAccessibility,
   resolveSidebarThreadStatus,
+  belongsOnSidebarWorkingShelf,
   resolveThreadStatusPill,
   resolveWorkingStartedAt,
   searchSidebarThreads,
@@ -845,6 +846,28 @@ describe("resolveSidebarThreadStatus", () => {
   });
 });
 
+describe("belongsOnSidebarWorkingShelf", () => {
+  const idle = { hasPendingApprovals: false, hasPendingUserInput: false, session: null };
+  const working = { ...idle, backgroundLiveness: "working" as const };
+  const monitoring = { ...idle, backgroundLiveness: "monitoring" as const };
+
+  it("shelves working threads and only shelves monitoring threads when enabled", () => {
+    expect(belongsOnSidebarWorkingShelf(working, false)).toBe(true);
+    expect(belongsOnSidebarWorkingShelf(monitoring, false)).toBe(false);
+    expect(belongsOnSidebarWorkingShelf(monitoring, true)).toBe(true);
+  });
+
+  it("keeps threads that need the user in the active list", () => {
+    expect(belongsOnSidebarWorkingShelf({ ...working, hasPendingApprovals: true }, true)).toBe(
+      false,
+    );
+    expect(belongsOnSidebarWorkingShelf({ ...working, hasPendingUserInput: true }, true)).toBe(
+      false,
+    );
+    expect(belongsOnSidebarWorkingShelf(idle, true)).toBe(false);
+  });
+});
+
 describe("searchSidebarThreads", () => {
   const searchThread = (id: string, title: string, project: string) => ({
     environmentId: localEnvironmentId,
@@ -1224,6 +1247,34 @@ describe("resolveSidebarDropTarget", () => {
   it("never lands in the snoozed shelf", () => {
     expect(resolve("a1", "z1")).toBeNull();
     expect(resolve("a1", sidebarMarkerId("snoozed-header"))).toBeNull();
+  });
+
+  it("never lands in the working shelf, and keeps its rows out of the active order", () => {
+    const withWorking: readonly SidebarListItem[] = [
+      marker("pinned-header"),
+      marker("pinned-divider"),
+      thread("a1", "active"),
+      thread("a2", "active"),
+      marker("working-header"),
+      thread("w1", "working"),
+      marker("settled-header"),
+      thread("s1", "settled"),
+    ];
+    expect(resolveSidebarDropTarget(withWorking, "a1", "w1")).toBeNull();
+    expect(
+      resolveSidebarDropTarget(withWorking, "a1", sidebarMarkerId("working-header")),
+    ).toBeNull();
+    expect(resolveSidebarDropTarget(withWorking, "a1", "a2")).toEqual({
+      section: "active",
+      pinnedOrder: [],
+      activeOrder: ["a2", "a1"],
+    });
+    // From below, the header shifts down and the gap lands in Active.
+    expect(resolveSidebarDropTarget(withWorking, "s1", sidebarMarkerId("working-header"))).toEqual({
+      section: "active",
+      pinnedOrder: [],
+      activeOrder: ["a1", "a2", "s1"],
+    });
   });
 
   it("lands on a placeholder when the section is otherwise empty", () => {

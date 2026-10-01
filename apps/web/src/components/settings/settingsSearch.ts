@@ -274,6 +274,19 @@ export const SETTINGS_SEARCH_ITEMS = [
     searchTerms: ["combine matching repositories environments sidebar"],
   },
   {
+    id: "working-shelf",
+    title: "Working shelf",
+    to: "/settings/general",
+    searchTerms: ["hide running threads collapse sidebar"],
+  },
+  {
+    id: "working-shelf-monitoring",
+    title: "Shelve monitoring threads",
+    to: "/settings/general",
+    targetId: "working-shelf",
+    searchTerms: ["working shelf monitoring watch background sidebar"],
+  },
+  {
     id: "auto-settle-inactive-threads",
     title: "Auto-settle inactive threads",
     to: "/settings/general",

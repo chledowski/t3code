@@ -563,6 +563,13 @@ export function useSettingsRestore(onRestored?: () => void) {
       DEFAULT_UNIFIED_SETTINGS.sidebarProjectGroupingMode
         ? ["Project Grouping"]
         : []),
+      ...(settings.sidebarWorkingShelf !== DEFAULT_UNIFIED_SETTINGS.sidebarWorkingShelf
+        ? ["Working shelf"]
+        : []),
+      ...(settings.sidebarWorkingShelfIncludesMonitoring !==
+      DEFAULT_UNIFIED_SETTINGS.sidebarWorkingShelfIncludesMonitoring
+        ? ["Shelve monitoring threads"]
+        : []),
       ...(settings.sidebarAutoSettleAfterDays !==
       DEFAULT_UNIFIED_SETTINGS.sidebarAutoSettleAfterDays
         ? ["Auto-settle inactive threads"]
@@ -685,6 +692,8 @@ export function useSettingsRestore(onRestored?: () => void) {
       settings.sidebarAutoSettleOnMerge,
       settings.sidebarProjectGroupingMode,
       settings.sidebarThreadPreviewCount,
+      settings.sidebarWorkingShelf,
+      settings.sidebarWorkingShelfIncludesMonitoring,
       settings.showSkillsInSlashMenu,
       settings.timestampFormat,
       settings.notificationMode,
@@ -783,6 +792,9 @@ export function useSettingsRestore(onRestored?: () => void) {
       sidebarProjectGroupingMode: DEFAULT_UNIFIED_SETTINGS.sidebarProjectGroupingMode,
       sidebarAutoSettleAfterDays: DEFAULT_UNIFIED_SETTINGS.sidebarAutoSettleAfterDays,
       sidebarAutoSettleOnMerge: DEFAULT_UNIFIED_SETTINGS.sidebarAutoSettleOnMerge,
+      sidebarWorkingShelf: DEFAULT_UNIFIED_SETTINGS.sidebarWorkingShelf,
+      sidebarWorkingShelfIncludesMonitoring:
+        DEFAULT_UNIFIED_SETTINGS.sidebarWorkingShelfIncludesMonitoring,
       responseStreamingMode: DEFAULT_UNIFIED_SETTINGS.responseStreamingMode,
       enableProviderUpdateChecks: DEFAULT_UNIFIED_SETTINGS.enableProviderUpdateChecks,
       continueThreadsAfterServerUpdate: DEFAULT_UNIFIED_SETTINGS.continueThreadsAfterServerUpdate,
@@ -2268,6 +2280,62 @@ export function GeneralSettingsPanel() {
             />
           }
         />
+
+        <SettingsRow
+          {...searchableSetting("working-shelf")}
+          description="Move working threads into a collapsed Working shelf once you leave them."
+          resetAction={
+            settings.sidebarWorkingShelf !== DEFAULT_UNIFIED_SETTINGS.sidebarWorkingShelf ? (
+              <SettingResetButton
+                label="working shelf"
+                onClick={() =>
+                  updateSettings({
+                    sidebarWorkingShelf: DEFAULT_UNIFIED_SETTINGS.sidebarWorkingShelf,
+                  })
+                }
+              />
+            ) : null
+          }
+          control={
+            <Switch
+              checked={settings.sidebarWorkingShelf}
+              onCheckedChange={(checked) =>
+                updateSettings({ sidebarWorkingShelf: Boolean(checked) })
+              }
+              aria-label="Working shelf"
+            />
+          }
+        />
+
+        {settings.sidebarWorkingShelf ? (
+          <SettingsRow
+            {...searchableSetting("working-shelf-monitoring")}
+            description="Also shelve threads whose only remaining work is monitoring."
+            resetAction={
+              settings.sidebarWorkingShelfIncludesMonitoring !==
+              DEFAULT_UNIFIED_SETTINGS.sidebarWorkingShelfIncludesMonitoring ? (
+                <SettingResetButton
+                  label="shelve monitoring threads"
+                  onClick={() =>
+                    updateSettings({
+                      sidebarWorkingShelfIncludesMonitoring:
+                        DEFAULT_UNIFIED_SETTINGS.sidebarWorkingShelfIncludesMonitoring,
+                    })
+                  }
+                />
+              ) : null
+            }
+            control={
+              <Switch
+                checked={settings.sidebarWorkingShelfIncludesMonitoring}
+                onCheckedChange={(checked) =>
+                  updateSettings({ sidebarWorkingShelfIncludesMonitoring: Boolean(checked) })
+                }
+                aria-label="Shelve monitoring threads"
+              />
+            }
+          />
+        ) : null}
 
         {supportsAutoSettlement ? (
           <>
