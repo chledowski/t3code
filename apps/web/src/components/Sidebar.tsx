@@ -2562,6 +2562,9 @@ export default function Sidebar() {
         override holds until all of them appear in canonical state. */
     readonly assignedKeys: ReadonlyMap<string, string>;
   } | null>(null);
+  // Only the working shelf reads the route, so navigation re-partitions
+  // threads only while it is enabled.
+  const workingShelfRouteKey = workingShelf ? routeThreadKey : null;
   const {
     pinnedThreads,
     draggableThreadKeys,
@@ -2632,9 +2635,10 @@ export default function Sidebar() {
         pinned.push(thread);
       } else if (
         workingShelf &&
-        // The open thread stays in the list until the user leaves it.
-        threadKey !== routeThreadKey &&
-        belongsOnSidebarWorkingShelf(thread, workingShelfIncludesMonitoring)
+        belongsOnSidebarWorkingShelf(thread, {
+          isOpen: threadKey === workingShelfRouteKey,
+          includeMonitoring: workingShelfIncludesMonitoring,
+        })
       ) {
         working.push(thread);
       } else {
@@ -2680,13 +2684,13 @@ export default function Sidebar() {
   }, [
     nowMinute,
     optimisticDrop,
-    routeThreadKey,
     scopedProjectKeys,
     serverConfigs,
     snoozeWakeTick,
     threads,
     workingShelf,
     workingShelfIncludesMonitoring,
+    workingShelfRouteKey,
   ]);
 
   const threadSearchInputRef = useRef<HTMLInputElement>(null);
@@ -4778,8 +4782,8 @@ export default function Sidebar() {
                         const threadKey = scopedThreadKey(
                           scopeThreadRef(thread.environmentId, thread.id),
                         );
-                        // Settled and snoozed are the ONLY things that collapse a
-                        // row: every other thread is a full card. Density comes
+                        // Shelved rows (working, snoozed, settled) are the ONLY
+                        // slim rows: every other thread is a full card. Density comes
                         // from users (or the auto rules) actually parking work,
                         // not from the sidebar second-guessing what still matters.
                         const isCard = section === "active" || section === "pinned";

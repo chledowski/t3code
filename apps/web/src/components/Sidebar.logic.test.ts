@@ -850,21 +850,30 @@ describe("belongsOnSidebarWorkingShelf", () => {
   const idle = { hasPendingApprovals: false, hasPendingUserInput: false, session: null };
   const working = { ...idle, backgroundLiveness: "working" as const };
   const monitoring = { ...idle, backgroundLiveness: "monitoring" as const };
+  const closed = { isOpen: false, includeMonitoring: false };
+  const withMonitoring = { isOpen: false, includeMonitoring: true };
 
   it("shelves working threads and only shelves monitoring threads when enabled", () => {
-    expect(belongsOnSidebarWorkingShelf(working, false)).toBe(true);
-    expect(belongsOnSidebarWorkingShelf(monitoring, false)).toBe(false);
-    expect(belongsOnSidebarWorkingShelf(monitoring, true)).toBe(true);
+    expect(belongsOnSidebarWorkingShelf(working, closed)).toBe(true);
+    expect(belongsOnSidebarWorkingShelf(monitoring, closed)).toBe(false);
+    expect(belongsOnSidebarWorkingShelf(monitoring, withMonitoring)).toBe(true);
+  });
+
+  it("keeps the open thread in the list until the user leaves it", () => {
+    expect(belongsOnSidebarWorkingShelf(working, { ...withMonitoring, isOpen: true })).toBe(false);
+    expect(belongsOnSidebarWorkingShelf(monitoring, { ...withMonitoring, isOpen: true })).toBe(
+      false,
+    );
   });
 
   it("keeps threads that need the user in the active list", () => {
-    expect(belongsOnSidebarWorkingShelf({ ...working, hasPendingApprovals: true }, true)).toBe(
-      false,
-    );
-    expect(belongsOnSidebarWorkingShelf({ ...working, hasPendingUserInput: true }, true)).toBe(
-      false,
-    );
-    expect(belongsOnSidebarWorkingShelf(idle, true)).toBe(false);
+    expect(
+      belongsOnSidebarWorkingShelf({ ...working, hasPendingApprovals: true }, withMonitoring),
+    ).toBe(false);
+    expect(
+      belongsOnSidebarWorkingShelf({ ...working, hasPendingUserInput: true }, withMonitoring),
+    ).toBe(false);
+    expect(belongsOnSidebarWorkingShelf(idle, withMonitoring)).toBe(false);
   });
 });
 

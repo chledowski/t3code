@@ -850,12 +850,14 @@ export function resolveSidebarThreadStatus(thread: SidebarThreadStatusInput): Si
   return "ready";
 }
 
-/** Working threads shelve when the user enables the working shelf; threads
-    whose only live work is monitoring shelve only when that is enabled too. */
+/** Working threads shelve once the user leaves them; threads whose only live
+    work is monitoring shelve only when that is enabled too. */
 export function belongsOnSidebarWorkingShelf(
   thread: SidebarThreadStatusInput,
-  includeMonitoring: boolean,
+  options: { readonly isOpen: boolean; readonly includeMonitoring: boolean },
 ): boolean {
+  if (options.isOpen) return false;
+  const { includeMonitoring } = options;
   const status = resolveSidebarThreadStatus(thread);
   return status === "working" || (includeMonitoring && status === "monitoring");
 }
